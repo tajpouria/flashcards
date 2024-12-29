@@ -43,7 +43,6 @@ export default function FlashcardApp() {
   const [newGroupName, setNewGroupName] = useState("");
   const [newFront, setNewFront] = useState("");
   const [newBack, setNewBack] = useState("");
-  const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [isListView, setIsListView] = useState(false);
   const [editingCard, setEditingCard] = useState<{
@@ -52,7 +51,6 @@ export default function FlashcardApp() {
     back: string;
   } | null>(null);
 
-  // Quiz-related state
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [quizCards, setQuizCards] = useState<FlashCard[]>([]);
   const [userAnswer, setUserAnswer] = useState("");
@@ -60,10 +58,53 @@ export default function FlashcardApp() {
   const [quizScore, setQuizScore] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
+  const [editingGroupName, setEditingGroupName] = useState("");
+
+  const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
+
+  const saveUserData = async () => {
+    if (!user) return;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/flashcards", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(groups),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save changes");
+      }
+    } catch (error) {
+      console.error("Error saving flashcards:", error);
+      setError("Failed to save changes. Please try again.");
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   useEffect(() => {
     const loadGroups = async () => {
-      if (!user) return;
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
 
+      setIsLoading(true);
+      setError(null);
       try {
         const token = localStorage.getItem("token");
         const response = await fetch("/api/flashcards", {
@@ -72,61 +113,164 @@ export default function FlashcardApp() {
           },
         });
 
-        if (response.ok) {
-          const { data } = await response.json();
-          setGroups(data || []);
+        if (!response.ok) {
+          throw new Error("Failed to load flashcards");
         }
+
+        const { data } = await response.json();
+        setGroups(data || []);
       } catch (error) {
         console.error("Error loading flashcards:", error);
+        setError("Failed to load flashcards. Please refresh the page.");
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadGroups();
   }, [user]);
 
-  const saveUserData = async () => {
-    if (!user) return;
+  const startEditingGroupName = (name: string) => {
+    setEditingGroupName(name);
+    setIsEditingGroup(true);
+  };
 
+  const saveGroupName = async () => {
+    if (editingGroupName.trim() && currentGroupIndex !== null) {
+      try {
+        setIsSaving(true);
+        const updatedGroups = [...groups];
+        updatedGroups[currentGroupIndex].name = editingGroupName.trim();
+
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/flashcards", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatedGroups),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update group name");
+        }
+
+        setGroups(updatedGroups);
+        setIsEditingGroup(false);
+        setEditingGroupName("");
+      } catch (error) {
+        console.error("Error updating group name:", error);
+        setError("Failed to update group name. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  const deleteGroup = async (index: number) => {
     try {
+      setIsSaving(true);
+      const updatedGroups = [...groups];
+      updatedGroups.splice(index, 1);
+
       const token = localStorage.getItem("token");
-      await fetch("/api/flashcards", {
+      const response = await fetch("/api/flashcards", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(groups),
+        body: JSON.stringify(updatedGroups),
       });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete group");
+      }
+
+      setGroups(updatedGroups);
+      setCurrentGroupIndex(null);
     } catch (error) {
-      console.error("Error saving user data:", error);
+      console.error("Error deleting group:", error);
+      setError("Failed to delete group. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const addGroup = async () => {
     if (newGroupName.trim()) {
-      const updatedGroups = [...groups, { name: newGroupName, cards: [] }];
-      setGroups(updatedGroups);
-      setNewGroupName("");
-      setIsAddingGroup(false);
-      await saveUserData();
+      try {
+        setIsSaving(true); // Show saving indicator
+        const updatedGroups = [...groups, { name: newGroupName, cards: [] }];
+
+        // First save to storage
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/flashcards", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatedGroups),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save group");
+        }
+
+        // If save was successful, update local state
+        setGroups(updatedGroups);
+        setNewGroupName("");
+      } catch (error) {
+        console.error("Error adding group:", error);
+        setError("Failed to create group. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
-  const addCard = () => {
+  const addCard = async () => {
     if (newFront.trim() && newBack.trim() && currentGroupIndex !== null) {
-      const updatedGroups = [...groups];
-      updatedGroups[currentGroupIndex].cards.push({
-        front: newFront,
-        back: newBack,
-      });
-      setGroups(updatedGroups);
-      setNewFront("");
-      setNewBack("");
-      setIsAddingCard(false);
+      try {
+        setIsSaving(true);
+        const updatedGroups = [...groups];
+        updatedGroups[currentGroupIndex].cards.push({
+          front: newFront,
+          back: newBack,
+        });
+
+        // Save to storage first
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/flashcards", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatedGroups),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save card");
+        }
+
+        // If save was successful, update local state
+        setGroups(updatedGroups);
+        setNewFront("");
+        setNewBack("");
+        setIsAddingCard(false);
+      } catch (error) {
+        console.error("Error adding card:", error);
+        setError("Failed to add card. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
-  const startEditingCard = (index: number) => {
+  const startEditingCard = async (index: number) => {
     const card = groups[currentGroupIndex!].cards[index];
     setEditingCard({
       index,
@@ -135,30 +279,80 @@ export default function FlashcardApp() {
     });
   };
 
-  const saveEditingCard = () => {
+  const saveEditingCard = async () => {
     if (
       editingCard?.front.trim() &&
       editingCard?.back.trim() &&
       currentGroupIndex !== null
     ) {
-      const updatedGroups = [...groups];
-      updatedGroups[currentGroupIndex].cards[editingCard.index] = {
-        front: editingCard.front,
-        back: editingCard.back,
-      };
-      setGroups(updatedGroups);
-      setEditingCard(null);
+      try {
+        setIsSaving(true);
+        const updatedGroups = [...groups];
+        updatedGroups[currentGroupIndex].cards[editingCard.index] = {
+          front: editingCard.front,
+          back: editingCard.back,
+        };
+
+        // Save to storage first
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/flashcards", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatedGroups),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save card changes");
+        }
+
+        // If save was successful, update local state
+        setGroups(updatedGroups);
+        setEditingCard(null);
+      } catch (error) {
+        console.error("Error updating card:", error);
+        setError("Failed to update card. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
-  const deleteCard = (index: number) => {
+  const deleteCard = async (index: number) => {
     if (currentGroupIndex === null) return;
 
-    const updatedGroups = [...groups];
-    updatedGroups[currentGroupIndex].cards.splice(index, 1);
-    setGroups(updatedGroups);
-    if (currentCardIndex >= index) {
-      setCurrentCardIndex(Math.max(0, currentCardIndex - 1));
+    try {
+      setIsSaving(true);
+      const updatedGroups = [...groups];
+      updatedGroups[currentGroupIndex].cards.splice(index, 1);
+
+      // Save to storage first
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/flashcards", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedGroups),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete card");
+      }
+
+      // If save was successful, update local state
+      setGroups(updatedGroups);
+      if (currentCardIndex >= index) {
+        setCurrentCardIndex(Math.max(0, currentCardIndex - 1));
+      }
+    } catch (error) {
+      console.error("Error deleting card:", error);
+      setError("Failed to delete card. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -246,35 +440,81 @@ export default function FlashcardApp() {
     return <Auth />;
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-400">Loading flashcards...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-xl mx-auto p-4">
+        <div className="bg-red-800/20 text-red-400 p-4 rounded-lg">
+          <p>{error}</p>
+          <Button
+            onClick={() => setError(null)}
+            className="mt-2 bg-red-600 hover:bg-red-700"
+          >
+            Dismiss
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // Group Selection View
   if (currentGroupIndex === null) {
     return (
       <div className="max-w-xl mx-auto p-4 space-y-4">
-        <h1 className="text-2xl font-bold text-center mb-6 text-gray-100">
-          Flashcard Groups
-        </h1>
         <Button
-          onClick={() => setIsAddingGroup(!isAddingGroup)}
+          onClick={() => setIsAddGroupModalOpen(true)}
           className="w-full mb-4 bg-gray-800 hover:bg-gray-700"
         >
           <FolderPlus className="mr-2 h-4 w-4" />
-          {isAddingGroup ? "Cancel" : "Create New Group"}
+          Create New Group
         </Button>
 
-        {isAddingGroup && (
-          <div className="space-y-4">
-            <Input
-              placeholder="Group name"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              className="mb-2 bg-gray-800 text-gray-100 border-gray-700 placeholder-gray-400"
-            />
-            <Button
-              onClick={addGroup}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-            >
-              Create Group
-            </Button>
+        {isAddGroupModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+              <CardContent className="p-6">
+                <h2 className="text-xl font-bold text-gray-100 mb-4">
+                  Create New Group
+                </h2>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Enter group name"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    className="bg-gray-700 text-gray-100 border-gray-600"
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setIsAddGroupModalOpen(false);
+                        setNewGroupName("");
+                      }}
+                      className="text-gray-400 hover:text-gray-300"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        await addGroup();
+                        setIsAddGroupModalOpen(false);
+                      }}
+                      disabled={!newGroupName.trim() || isSaving}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isSaving ? "Creating..." : "Create Group"}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -299,7 +539,7 @@ export default function FlashcardApp() {
             </Card>
           ))}
 
-          {groups.length === 0 && !isAddingGroup && (
+          {groups.length === 0 && (
             <div className="text-center p-8 text-gray-400 bg-gray-800 rounded-lg">
               No groups yet. Click "Create New Group" to get started!
             </div>
@@ -393,6 +633,11 @@ export default function FlashcardApp() {
             )}
           </div>
         </Card>
+        {isSaving && (
+          <div className="fixed bottom-4 right-4 bg-gray-800 text-gray-100 px-4 py-2 rounded-lg shadow-lg">
+            Saving changes...
+          </div>
+        )}
       </div>
     );
   }
@@ -462,11 +707,16 @@ export default function FlashcardApp() {
                         Cancel
                       </Button>
                       <Button
-                        onClick={saveEditingCard}
+                        onClick={async () => await saveEditingCard()}
+                        disabled={
+                          isSaving ||
+                          !editingCard?.front.trim() ||
+                          !editingCard?.back.trim()
+                        }
                         className="bg-green-600 hover:bg-green-700"
                       >
                         <Save className="h-4 w-4 mr-2" />
-                        Save Changes
+                        {isSaving ? "Saving..." : "Save Changes"}
                       </Button>
                     </div>
                   </div>
@@ -499,11 +749,12 @@ export default function FlashcardApp() {
                       </Button>
                       <Button
                         variant="ghost"
-                        onClick={() => deleteCard(index)}
+                        onClick={async () => await deleteCard(index)}
+                        disabled={isSaving}
                         className="text-red-500 hover:text-red-400"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
+                        {isSaving ? "Deleting..." : "Delete"}
                       </Button>
                     </div>
                   </div>
@@ -529,26 +780,49 @@ export default function FlashcardApp() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <h1 className="text-2xl font-bold text-gray-100">
-            {currentGroup.name}
-          </h1>
+          <div className="flex items-center space-x-2">
+            <h1 className="text-2xl font-bold text-gray-100">
+              {currentGroup.name}
+            </h1>
+            <div className="flex space-x-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setEditingGroupName(currentGroup.name);
+                  setIsEditingGroup(true);
+                }}
+                className="text-gray-400 hover:text-gray-300"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="text-red-500 hover:text-red-400"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
         <div className="flex space-x-2">
-          <Button
-            onClick={() => setIsListView(true)}
-            className="bg-gray-800 hover:bg-gray-700"
-          >
-            <List className="h-4 w-4 mr-2" />
-            View All
-          </Button>
           {currentGroup.cards.length > 0 && (
-            <Button
-              onClick={startQuiz}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Play className="h-4 w-4 mr-2" />
-              Start Quiz
-            </Button>
+            <>
+              <Button
+                onClick={() => setIsListView(true)}
+                className="bg-gray-800 hover:bg-gray-700"
+              >
+                <List className="h-4 w-4 mr-2" />
+                View All
+              </Button>
+              <Button
+                onClick={startQuiz}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Start Quiz
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -587,10 +861,11 @@ export default function FlashcardApp() {
               />
             </div>
             <Button
-              onClick={addCard}
+              onClick={async () => await addCard()}
+              disabled={isSaving || !newFront.trim() || !newBack.trim()}
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
-              Create Flashcard
+              {isSaving ? "Creating..." : "Create Flashcard"}
             </Button>
           </div>
         )}
@@ -652,6 +927,80 @@ export default function FlashcardApp() {
         <div className="text-center p-8 text-gray-400 bg-gray-800 rounded-lg">
           No flashcards in this group yet. Click "Add New Flashcard" to get
           started!
+        </div>
+      )}
+
+      {isEditingGroup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-bold text-gray-100 mb-4">
+                Edit Group Name
+              </h2>
+              <div className="space-y-4">
+                <Input
+                  placeholder="Enter new group name"
+                  value={editingGroupName}
+                  onChange={(e) => setEditingGroupName(e.target.value)}
+                  className="bg-gray-700 text-gray-100 border-gray-600"
+                />
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setIsEditingGroup(false);
+                      setEditingGroupName("");
+                    }}
+                    className="text-gray-400 hover:text-gray-300"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={saveGroupName}
+                    disabled={!editingGroupName.trim() || isSaving}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isSaving ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md bg-gray-800 border-gray-700">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-bold text-gray-100 mb-4">
+                Delete Group
+              </h2>
+              <p className="text-gray-300 mb-6">
+                Are you sure you want to delete this group? This action cannot
+                be undone.
+              </p>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-300"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    await deleteGroup(currentGroupIndex!);
+                    setIsDeleteModalOpen(false);
+                  }}
+                  disabled={isSaving}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {isSaving ? "Deleting..." : "Delete"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>
