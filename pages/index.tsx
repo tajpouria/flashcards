@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import Auth, { useAuth } from "@/components/Auth";
 import {
   Plus,
   ChevronLeft,
@@ -32,6 +33,7 @@ interface Group {
 }
 
 export default function FlashcardApp() {
+  const { user } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [currentGroupIndex, setCurrentGroupIndex] = useState<number | null>(
     null
@@ -58,11 +60,55 @@ export default function FlashcardApp() {
   const [quizScore, setQuizScore] = useState(0);
   const [totalAttempts, setTotalAttempts] = useState(0);
 
-  const addGroup = () => {
+  useEffect(() => {
+    const loadGroups = async () => {
+      if (!user) return;
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/flashcards", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const { data } = await response.json();
+          setGroups(data || []);
+        }
+      } catch (error) {
+        console.error("Error loading flashcards:", error);
+      }
+    };
+
+    loadGroups();
+  }, [user]);
+
+  const saveUserData = async () => {
+    if (!user) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      await fetch("/api/flashcards", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(groups),
+      });
+    } catch (error) {
+      console.error("Error saving user data:", error);
+    }
+  };
+
+  const addGroup = async () => {
     if (newGroupName.trim()) {
-      setGroups([...groups, { name: newGroupName, cards: [] }]);
+      const updatedGroups = [...groups, { name: newGroupName, cards: [] }];
+      setGroups(updatedGroups);
       setNewGroupName("");
       setIsAddingGroup(false);
+      await saveUserData();
     }
   };
 
@@ -195,6 +241,10 @@ export default function FlashcardApp() {
   const flipCard = () => {
     setIsFlipped(!isFlipped);
   };
+
+  if (!user) {
+    return <Auth />;
+  }
 
   // Group Selection View
   if (currentGroupIndex === null) {
