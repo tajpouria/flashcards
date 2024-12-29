@@ -1,0 +1,5 @@
+- [] Allow batch card addition (no need to click "add" repeatedly)
+- [] Display right and wrong answers after the quiz
+- [] Add a button to retry mistakes in the quiz
+- [] Prompt to type the correct answer for wrong responses
+- [] Increase text and element sizes to fill the screen
