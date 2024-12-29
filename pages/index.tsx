@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ import {
   Pencil,
   Save,
   Trash2,
+  Brain,
 } from "lucide-react";
 
 interface FlashCard {
@@ -33,7 +35,7 @@ interface Group {
 }
 
 export default function FlashcardApp() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [currentGroupIndex, setCurrentGroupIndex] = useState<number | null>(
     null
@@ -464,20 +466,63 @@ export default function FlashcardApp() {
     );
   }
 
+  const cardVariants = {
+    hidden: { opacity: 0, scale: 0.9 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 20,
+      },
+    },
+    flipped: {
+      rotateY: 180,
+      transition: {
+        type: "tween",
+        duration: 0.5,
+      },
+    },
+  };
+
   // Group Selection View
   if (currentGroupIndex === null) {
     return (
-      <div className="max-w-xl mx-auto p-4 space-y-4">
-        <Button
-          onClick={() => setIsAddGroupModalOpen(true)}
-          className="w-full mb-4 bg-gray-800 hover:bg-gray-700"
-        >
-          <FolderPlus className="mr-2 h-4 w-4" />
-          Create New Group
-        </Button>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-xl mx-auto p-4 space-y-4"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center space-x-2">
+            <p className="font-bold text-gray-100">Welcome, {user + " 😊"}</p>
+          </div>
+          <Button
+            onClick={logout}
+            variant="ghost"
+            className="text-red-500 hover:text-red-400 hover:bg-gray-800"
+          >
+            Logout
+          </Button>
+        </div>
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <Button
+            onClick={() => setIsAddGroupModalOpen(true)}
+            className="w-full mb-4 bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            <FolderPlus className="mr-2 h-4 w-4" />
+            🌟 Create Study Group
+          </Button>
+        </motion.div>
 
         {isAddGroupModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          >
             <Card className="w-full max-w-md bg-gray-800 border-gray-700">
               <CardContent className="p-6">
                 <h2 className="text-xl font-bold text-gray-100 mb-4">
@@ -515,37 +560,55 @@ export default function FlashcardApp() {
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </motion.div>
         )}
 
-        <div className="space-y-2">
-          {groups.map((group, index) => (
-            <Card
-              key={index}
-              className="bg-gray-800 border-gray-700 hover:bg-gray-700 cursor-pointer"
-              onClick={() => selectGroup(index)}
-            >
-              <CardContent className="p-4 flex justify-between items-center">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-100">
-                    {group.name}
-                  </h2>
-                  <p className="text-sm text-gray-400">
-                    {group.cards.length} cards
-                  </p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-gray-400" />
-              </CardContent>
-            </Card>
-          ))}
+        <AnimatePresence>
+          <div className="space-y-2">
+            {groups.map((group, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, x: -50 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 50 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Card
+                  className="bg-gradient-to-r from-indigo-600/10 to-purple-600/10 border-indigo-500/20 hover:bg-indigo-600/20 cursor-pointer transition-all"
+                  onClick={() => selectGroup(index)}
+                >
+                  <CardContent className="p-4 flex justify-between items-center">
+                    <div>
+                      <h2 className="text-lg font-bold text-indigo-900 dark:text-indigo-200">
+                        📚 {group.name}
+                      </h2>
+                      <p className="text-sm text-indigo-600 dark:text-indigo-400">
+                        {group.cards.length} flashcards 🃏
+                      </p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-indigo-500" />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
 
-          {groups.length === 0 && (
-            <div className="text-center p-8 text-gray-400 bg-gray-800 rounded-lg">
-              No groups yet. Click "Create New Group" to get started!
-            </div>
-          )}
-        </div>
-      </div>
+            {groups.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center p-8 bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg"
+              >
+                <Brain className="mx-auto h-12 w-12 text-indigo-500 mb-4" />
+                <p className="text-indigo-800 dark:text-indigo-200">
+                  🚀 Your learning journey starts here! Create your first study
+                  group.
+                </p>
+              </motion.div>
+            )}
+          </div>
+        </AnimatePresence>
+      </motion.div>
     );
   }
 
@@ -554,7 +617,12 @@ export default function FlashcardApp() {
   // Quiz Mode View
   if (isQuizMode && quizCards.length > 0) {
     return (
-      <div className="max-w-xl mx-auto p-4 space-y-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-xl mx-auto p-4 space-y-4"
+      >
         <div className="flex items-center justify-between mb-6">
           <Button
             variant="ghost"
@@ -638,7 +706,7 @@ export default function FlashcardApp() {
             Saving changes...
           </div>
         )}
-      </div>
+      </motion.div>
     );
   }
 
@@ -654,11 +722,10 @@ export default function FlashcardApp() {
               className="mr-2 text-gray-300 hover:text-gray-100 hover:bg-gray-800"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
             </Button>
-            <h1 className="text-2xl font-bold text-gray-100">
+            <h2 className="text-2xl font-bold text-gray-100 truncate w-36">
               {currentGroup.name}
-            </h1>
+            </h2>
           </div>
         </div>
 
@@ -777,13 +844,12 @@ export default function FlashcardApp() {
             onClick={exitGroup}
             className="mr-2 text-gray-300 hover:text-gray-100 hover:bg-gray-800"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+            <ArrowLeft className="h-5 w-5 mr-2" />
           </Button>
           <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-bold text-gray-100">
+            <h2 className="text-2xl font-bold text-gray-100 truncate w-36">
               {currentGroup.name}
-            </h1>
+            </h2>
             <div className="flex space-x-2">
               <Button
                 variant="ghost"
@@ -805,26 +871,6 @@ export default function FlashcardApp() {
             </div>
           </div>
         </div>
-        <div className="flex space-x-2">
-          {currentGroup.cards.length > 0 && (
-            <>
-              <Button
-                onClick={() => setIsListView(true)}
-                className="bg-gray-800 hover:bg-gray-700"
-              >
-                <List className="h-4 w-4 mr-2" />
-                View All
-              </Button>
-              <Button
-                onClick={startQuiz}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Start Quiz
-              </Button>
-            </>
-          )}
-        </div>
       </div>
 
       <div className="mb-6">
@@ -835,6 +881,28 @@ export default function FlashcardApp() {
           <Plus className="mr-2 h-4 w-4" />
           {isAddingCard ? "Cancel" : "Add New Flashcard"}
         </Button>
+
+        {currentGroup.cards.length > 0 && !isAddingCard && (
+          <Button
+            onClick={() => setIsListView(true)}
+            className="w-full mb-4 bg-yellow-800 hover:bg-yellow-700"
+          >
+            <List className="h-4 w-4 mr-2" />
+            View All
+          </Button>
+        )}
+
+        {currentGroup.cards.length > 0 && !isAddingCard && (
+          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+            <Button
+              onClick={startQuiz}
+              className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Play className="h-4 w-4 mr-2" />
+              Quiz
+            </Button>
+          </motion.div>
+        )}
 
         {isAddingCard && (
           <div className="space-y-4">
@@ -923,12 +991,12 @@ export default function FlashcardApp() {
             </Button>
           </div>
         </div>
-      ) : (
+      ) : !isAddingCard ? (
         <div className="text-center p-8 text-gray-400 bg-gray-800 rounded-lg">
           No flashcards in this group yet. Click "Add New Flashcard" to get
           started!
         </div>
-      )}
+      ) : null}
 
       {isEditingGroup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">

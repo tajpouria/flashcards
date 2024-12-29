@@ -52,6 +52,6 @@ export default async function handler(
           ? 400
           : 500
       )
-      .json({ error: error.message || "Registration failed" });
+      .json({ error: (error as any).message || "Registration failed" });
   }
 }

@@ -42,6 +42,6 @@ export default async function handler(
       .status(
         error instanceof Error && error.message === "Invalid token" ? 401 : 500
       )
-      .json({ error: error.message || "Internal Server Error" });
+      .json({ error: (error as any).message || "Internal Server Error" });
   }
 }

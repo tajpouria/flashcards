@@ -31,6 +31,6 @@ export default async function handler(
           ? 401
           : 500
       )
-      .json({ error: error.message || "Login failed" });
+      .json({ error: (error as any).message || "Login failed" });
   }
 }
