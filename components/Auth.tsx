@@ -158,7 +158,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 // Main Authentication Component
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
